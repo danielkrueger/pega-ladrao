@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PEGA LADRÃO 2.5D">
+<title>PEGA LADRÃO 2.5D — Keystone Kapers</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #060911;
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: 'Courier New', Courier, monospace, sans-serif;
+    color-scheme: dark;
+  }
+  canvas#game {
+    position: fixed;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    cursor: default;
+    touch-action: none;
+    z-index: 1;
+  }
+
+  /* CRT Scanline & Phosphor Overlay (Toggleable) */
+  #crt-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.28) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+    background-size: 100% 3px, 6px 100%;
+    opacity: 0.85;
+    transition: opacity 0.3s;
+  }
+  #crt-overlay.disabled {
+    opacity: 0;
+  }
+
+  /* Ranking / Score Dialog */
+  #score-modal {
+    display: none;
+    position: fixed;
+    z-index: 10;
+    inset: 0;
+    background: rgba(4, 7, 14, 0.82);
+    place-items: center;
+    padding: 16px;
+  }
+  body.show-score #score-modal {
+    display: grid;
+  }
+
+  .modal-card {
+    width: min(92vw, 480px);
+    background: #0f172a;
+    border: 3px solid #e5b824;
+    border-radius: 8px;
+    padding: 20px 24px;
+    box-shadow: 0 0 30px rgba(229, 184, 36, 0.3), inset 0 0 20px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    text-align: center;
+  }
+
+  .modal-title {
+    color: #ffd700;
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    margin: 0;
+    text-shadow: 2px 2px #000;
+  }
+
+  .modal-summary {
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .score-highlight {
+    color: #38bdf8;
+    font-size: 24px;
+    font-weight: bold;
+    margin: 4px 0;
+  }
+
+  .score-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .score-inputs input {
+    font-family: inherit;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    letter-spacing: 2px;
+    padding: 10px;
+    background: #050811;
+    border: 2px solid #3b82f6;
+    border-radius: 4px;
+    color: #fff;
+    outline: none;
+  }
+  .score-inputs input:focus {
+    border-color: #ffd700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .btn-retro {
+    flex: 1;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    padding: 12px 14px;
+    border: 2px solid #e5b824;
+    border-radius: 4px;
+    background: #1e293b;
+    color: #f8fafc;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    touch-action: manipulation;
+  }
+  .btn-retro:hover, .btn-retro:active {
+    background: #e5b824;
+    color: #0f172a;
+    box-shadow: 0 0 12px rgba(229, 184, 36, 0.6);
+  }
+  .btn-retro.primary {
+    background: #2563eb;
+    border-color: #60a5fa;
+  }
+  .btn-retro.primary:hover {
+    background: #60a5fa;
+    color: #0f172a;
+  }
+
+  /* Ranking Table inside modal */
+  .ranking-box {
+    display: none;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #334155;
+    background: #050811;
+    padding: 8px;
+    border-radius: 4px;
+  }
+  .ranking-box.active {
+    display: block;
+  }
+  .ranking-list {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .ranking-list th {
+    color: #94a3b8;
+    border-bottom: 1px solid #334155;
+    padding: 4px 6px;
+    text-align: left;
+  }
+  .ranking-list td {
+    padding: 6px;
+    text-align: left;
+    color: #cbd5e1;
+  }
+  .ranking-list tr:nth-child(1) td { color: #facc15; font-weight: bold; }
+  .ranking-list tr:nth-child(2) td { color: #e2e8f0; font-weight: bold; }
+  .ranking-list tr:nth-child(3) td { color: #f97316; font-weight: bold; }
+
+  .msg-feedback {
+    font-size: 12px;
+    min-height: 16px;
+    color: #f87171;
+  }
+
+  /* Rotate Screen Reminder for Mobile Portrait */
+  #rotate-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #070c18;
+    color: #fff;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 24px;
+  }
+  body.portrait #rotate-overlay {
+    display: flex;
+  }
+  .rotate-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    animation: rotatePhone 2.2s infinite ease-in-out;
+  }
+  @keyframes rotatePhone {
+    0%, 10% { transform: rotate(0deg); }
+    50%, 70% { transform: rotate(90deg); }
+    100% { transform: rotate(0deg); }
+  }
+  .rotate-title {
+    color: #ffd700;
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+  .rotate-desc {
+    color: #94a3b8;
+    font-size: 14px;
+    max-width: 320px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="crt-overlay"></div>
+
+<!-- Overlay para girar o celular caso esteja em modo retrato -->
+<div id="rotate-overlay" aria-hidden="true">
+  <div class="rotate-icon">📱↻</div>
+  <div class="rotate-title">GIRE O CELULAR</div>
+  <div class="rotate-desc">Para a melhor experiência com controles 2.5D, jogue com o celular na horizontal (modo paisagem).</div>
+</div>
+
+<!-- Modal de Fim de Jogo / Ranking -->
+<div id="score-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-card">
+    <h2 id="modal-title" class="modal-title">FIM DE JOGO</h2>
+    <div id="modal-summary" class="modal-summary">
+      <div id="score-display" class="score-highlight">0 PONTOS</div>
+      <div id="stats-display">Andar 1 · Tempo 00:00</div>
+    </div>
+
+    <!-- Formulário para salvar pontuação -->
+    <div id="form-container" class="score-inputs">
+      <input id="player-name" type="text" maxlength="12" placeholder="SEU NOME" autocomplete="off" spellcheck="false" aria-label="Nome do jogador">
+      <div class="modal-actions">
+        <button id="btn-save-score" class="btn-retro primary" type="button">SALVAR SCORE</button>
+        <button id="btn-view-ranking" class="btn-retro" type="button">VER RANKING</button>
+      </div>
+    </div>
+
+    <!-- Tabela de Ranking -->
+    <div id="ranking-container" class="ranking-box">
+      <table class="ranking-list">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>NOME</th>
+            <th>PONTOS</th>
+            <th>FASE</th>
+          </tr>
+        </thead>
+        <tbody id="ranking-body">
+          <tr><td colspan="4" style="text-align:center">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="modal-feedback" class="msg-feedback"></div>
+
+    <div class="modal-actions">
+      <button id="btn-restart" class="btn-retro" type="button">JOGAR NOVAMENTE [ENTER]</button>
+    </div>
+  </div>
+</div>
+
+<script src="game.js?v=6"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

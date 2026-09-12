@@ -1,0 +1,13 @@
+{
+  "name": "pega-ladrao",
+  "version": "1.0.0",
+  "description": "Jogo Pega Ladrão (Keystone Kapers) em 2.5D retrô Atari para navegador e celular",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}

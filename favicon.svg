@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0c1220"/>
+  <!-- Gold Shield / Badge Outer -->
+  <path d="M32 6 L54 16 C54 38 44 52 32 58 C20 52 10 38 10 16 Z" fill="#e5b824" stroke="#8c6a0c" stroke-width="2"/>
+  <!-- Inner Shield -->
+  <path d="M32 10 L50 18 C50 36 41 48 32 53 C23 48 14 36 14 18 Z" fill="#1b3f8b"/>
+  <!-- Star / Insignia in Center -->
+  <polygon points="32,18 36,27 46,28 38,35 41,45 32,39 23,45 26,35 18,28 28,27" fill="#fbd341"/>
+  <!-- Cop Bobby Helmet Silhouette -->
+  <circle cx="32" cy="31" r="5" fill="#0d1b38"/>
+  <rect x="29" y="24" width="6" height="3" fill="#fbd341"/>
+</svg>
