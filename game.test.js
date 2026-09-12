@@ -622,4 +622,70 @@ test('minimapa na parte inferior possui as 3 escadas conectando os andares e exe
   }, 'Renderização do radar com escadas e elevador deve executar sem erros');
 });
 
+test('modo celular detecta toque e configura zonas de toque virtuais completas', () => {
+  const env = bootGame(true);
+  assert.equal(env.game.isTouchMode(), true, 'Touch mode deve ser ativado com ?touch=1');
+
+  const zones = env.game.getTouchZones();
+  assert.ok(zones.length >= 7, 'Deve conter todos os botões virtuais');
+  assert.ok(zones.some(z => z.code === 'ArrowLeft'), 'Botão virtual Esquerda');
+  assert.ok(zones.some(z => z.code === 'ArrowRight'), 'Botão virtual Direita');
+  assert.ok(zones.some(z => z.code === 'ArrowDown'), 'Botão virtual Abaixar');
+  assert.ok(zones.some(z => z.code === 'Space'), 'Botão virtual Pulo');
+  assert.ok(zones.some(z => z.code === 'KeyE'), 'Botão virtual Elevador');
+  assert.ok(zones.some(z => z.code === 'Fullscreen'), 'Botão virtual Tela Cheia');
+});
+
+test('controles virtuais suportam multitoque para mover e pular simultaneamente', () => {
+  const env = bootGame(true);
+  env.game.setState('play');
+  env.game.resetGame();
+
+  const zones = env.game.getTouchZones();
+  const rightZone = zones.find(z => z.code === 'ArrowRight');
+  const jumpZone = zones.find(z => z.code === 'Space');
+
+  // Dedo 1 pressiona Direita
+  env.pointerDown(rightZone.x, rightZone.y, 1);
+  assert.equal(env.game.getPlayer().facing, 1);
+
+  // Executa um passo de física: Kelly começa a correr
+  env.game.step(0.05);
+  const p1 = env.game.getPlayer();
+  assert.ok(p1.vx > 0, 'Kelly deve estar acelerando para a direita');
+
+  // Dedo 2 pressiona Pulo enquanto Dedo 1 continua segurando Direita
+  env.pointerDown(jumpZone.x, jumpZone.y, 2);
+  env.game.step(0.016);
+  const p2 = env.game.getPlayer();
+  assert.ok(p2.vy < 0, 'Kelly deve pular enquanto corre');
+  assert.ok(p2.vx > 0, 'Kelly deve manter a velocidade horizontal para a direita');
+
+  // Solta o dedo do pulo (Dedo 2) mantendo o dedo da corrida (Dedo 1)
+  env.pointerUp(2);
+  env.game.step(0.016);
+  const p3 = env.game.getPlayer();
+  assert.ok(p3.vx > 0, 'Kelly continua correndo após soltar o pulo');
+
+  // Solta o dedo da corrida (Dedo 1)
+  env.pointerUp(1);
+  env.game.step(0.1);
+});
+
+test('alternância de tela cheia e toque na tela de título para iniciar', () => {
+  const env = bootGame(true);
+  assert.equal(env.game.getState(), 'title');
+
+  // Testa alternância de tela cheia sem falhas
+  assert.doesNotThrow(() => {
+    env.game.toggleFullscreen();
+  }, 'Alternância de tela cheia deve executar de forma segura');
+
+  // Toque na tela de título inicia a partida
+  env.pointerDown(500, 400, 1);
+  assert.equal(env.game.getState(), 'play', 'Tocar na tela de título deve iniciar o jogo');
+  env.pointerUp(1);
+});
+
+
 

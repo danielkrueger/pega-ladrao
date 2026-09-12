@@ -1,10 +1,10 @@
 'use strict';
 
-const CACHE = 'pega-ladrao-v6';
+const CACHE = 'pega-ladrao-v7';
 const SHELL = [
   '/',
   '/index.html',
-  '/game.js?v=6',
+  '/game.js?v=7',
   '/favicon.svg',
   '/manifest.webmanifest',
   '/icons/icon-192.png',

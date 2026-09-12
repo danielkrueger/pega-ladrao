@@ -21,8 +21,10 @@ const LEVEL_WIDTH = ROOM_WIDTH * TOTAL_ROOMS; // 2880px no total (3 quadros)
 let VW = 960;
 let S = 1;
 let DPR = 1, CW = 0, CH = 0;
+let US = 1, UW = 960, UH = 720;
 let PORTRAIT = false;
 let TOUCH_MODE = false;
+const TOUCH_OVERRIDE = typeof window !== 'undefined' && window.location ? new URLSearchParams(window.location.search).get('touch') === '1' : false;
 
 // ============================================================================
 // TEMAS VISUAIS E ESTRUTURAIS POR FASE (ROTAÇÃO RETRÔ ACTIVISION ATARI)
@@ -289,11 +291,46 @@ const modalFeedback = document.getElementById('modal-feedback');
 
 let CRT_ENABLED = true;
 
+function isFullscreen() {
+  if (typeof document === 'undefined') return false;
+  return !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
+}
+
+function toggleFullscreen() {
+  if (typeof document === 'undefined') return;
+  const doc = document;
+  const el = doc.documentElement || doc.body;
+  if (!el) return;
+  const request = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+
+  if (!isFullscreen()) {
+    if (request) {
+      try {
+        const p = request.call(el);
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    }
+  } else {
+    if (exit) {
+      try {
+        const p = exit.call(doc);
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    }
+  }
+}
+
 function detectTouch() {
   return (
-    new URLSearchParams(window.location.search).get('touch') === '1' ||
-    window.matchMedia('(pointer: coarse)').matches ||
-    (navigator.maxTouchPoints > 0 && window.matchMedia('(hover: none)').matches)
+    TOUCH_OVERRIDE ||
+    (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0 && window.matchMedia && window.matchMedia('(hover: none)').matches)
   );
 }
 
@@ -310,16 +347,35 @@ function resize() {
 
   TOUCH_MODE = detectTouch();
   PORTRAIT = TOUCH_MODE && CH > CW;
-  document.body.classList.toggle('portrait', PORTRAIT);
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.classList.toggle('portrait', PORTRAIT);
+    document.body.classList.toggle('touch-device', TOUCH_MODE);
+  }
 
   // Escala mantendo o quadro exatamente no padrão 960x720
   S = Math.min(CW / ROOM_WIDTH, CH / VH);
   VW = ROOM_WIDTH;
+
+  // Escala de tela cheia para controles virtuais e HUD móvel
+  US = Math.max(S, 0.72);
+  UW = CW / US;
+  UH = CH / US;
+
+  if (PORTRAIT) {
+    releaseTouches();
+  }
 }
 
 window.addEventListener('resize', () => requestAnimationFrame(resize));
 if (window.visualViewport) window.visualViewport.addEventListener('resize', () => requestAnimationFrame(resize));
-window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+window.addEventListener('orientationchange', () => {
+  setTimeout(resize, 150);
+  setTimeout(resize, 400);
+});
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('fullscreenchange', () => setTimeout(resize, 100));
+  document.addEventListener('webkitfullscreenchange', () => setTimeout(resize, 100));
+}
 
 // ============================================================================
 // ENTRADAS (TECLADO, GAMEPAD & TOUCHSCREEN)
@@ -347,6 +403,9 @@ window.addEventListener('keydown', e => {
     MUTED = !MUTED;
     if (masterGain) masterGain.gain.value = MUTED ? 0 : 0.75;
   }
+  if (e.code === 'KeyF') {
+    toggleFullscreen();
+  }
 });
 
 window.addEventListener('keyup', e => {
@@ -354,55 +413,168 @@ window.addEventListener('keyup', e => {
 });
 
 function getTouchZones() {
-  const W = VW;
-  const H = VH;
+  const W = UW;
+  const H = UH;
   return [
-    { id: 'left', code: 'ArrowLeft', x: 80, y: H - 110, r: 42, label: '◄' },
-    { id: 'right', code: 'ArrowRight', x: 175, y: H - 110, r: 42, label: '►' },
-    { id: 'duck', code: 'ArrowDown', x: 128, y: H - 55, r: 36, label: '▼' },
+    // Controles direcionais (Polegar Esquerdo)
+    { id: 'left', code: 'ArrowLeft', x: 80, y: H - 90, vr: 34, r: 52, label: '◄', sublabel: 'ESQ' },
+    { id: 'right', code: 'ArrowRight', x: 190, y: H - 90, vr: 34, r: 52, label: '►', sublabel: 'DIR' },
+    { id: 'duck', code: 'ArrowDown', x: 135, y: H - 35, vr: 26, r: 42, label: '▼', sublabel: 'ABAIXAR' },
 
-    { id: 'jump', code: 'Space', x: W - 85, y: H - 110, r: 46, label: 'PULO' },
-    { id: 'action', code: 'KeyE', x: W - 185, y: H - 110, r: 40, label: 'ELEV' },
+    // Botões de Ação (Polegar Direito)
+    { id: 'jump', code: 'Space', x: W - 85, y: H - 100, vr: 42, r: 58, label: 'PULO', sublabel: '▲' },
+    { id: 'action', code: 'KeyE', x: W - 195, y: H - 88, vr: 34, r: 48, label: 'ELEV', sublabel: 'E' },
 
-    { id: 'crt', code: 'KeyC', x: W - 110, y: 35, r: 24, label: 'CRT' },
-    { id: 'mute', code: 'KeyM', x: W - 45, y: 35, r: 24, label: 'SOM' }
+    // Botões Utilitários no Topo
+    { id: 'fullscreen', code: 'Fullscreen', x: W - 155, y: 38, vr: 22, r: 32, label: '⛶', sublabel: 'TELA' },
+    { id: 'crt', code: 'KeyC', x: W - 100, y: 38, vr: 22, r: 30, label: 'CRT', sublabel: 'FILTRO' },
+    { id: 'mute', code: 'KeyM', x: W - 45, y: 38, vr: 22, r: 30, label: MUTED ? '🔇' : '🔊', sublabel: 'SOM' }
   ];
 }
 
-function handlePointer(e, isDown) {
-  initAudio();
-  if (!TOUCH_MODE) return;
+function getTitleButtons() {
+  const w = 260;
+  return {
+    play: { x: UW / 2 - w / 2, y: UH * 0.65, w: w, h: 54 },
+    fullscreen: { x: UW / 2 - w / 2, y: UH * 0.75, w: w, h: 44 },
+    touchToggle: { x: UW / 2 - w / 2, y: UH * 0.84, w: w, h: 38 }
+  };
+}
+
+function canvasPoint(e) {
   const rect = cv.getBoundingClientRect();
-  const offsetX = (CW - ROOM_WIDTH * S) / 2;
-  const offsetY = (CH - VH * S) / 2;
-  const px = (e.clientX - rect.left - offsetX) / S;
-  const py = (e.clientY - rect.top - offsetY) / S;
+  return {
+    x: (e.clientX - rect.left) / US,
+    y: (e.clientY - rect.top) / US
+  };
+}
 
-  if (isDown) {
-    TOUCHES.set(e.pointerId, { x: px, y: py });
-  } else {
-    TOUCHES.delete(e.pointerId);
-  }
+function pointInZone(p, z) {
+  const dx = p.x - z.x;
+  const dy = p.y - z.y;
+  return dx * dx + dy * dy <= z.r * z.r;
+}
 
-  const zones = getTouchZones();
-  for (const z of zones) {
-    let pressed = false;
-    for (const t of TOUCHES.values()) {
-      const dx = t.x - z.x;
-      const dy = t.y - z.y;
-      if (dx * dx + dy * dy <= z.r * z.r) {
-        pressed = true;
-        break;
-      }
-    }
-    KEYS[z.code] = pressed;
+function pointInRect(p, r) {
+  return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+}
+
+function releaseTouch(id) {
+  const code = TOUCHES.get(id);
+  TOUCHES.delete(id);
+  if (code && !Array.from(TOUCHES.values()).includes(code)) {
+    KEYS[code] = false;
   }
 }
 
-cv.addEventListener('pointerdown', e => { e.preventDefault(); handlePointer(e, true); });
-cv.addEventListener('pointermove', e => { if (TOUCHES.has(e.pointerId)) handlePointer(e, true); });
-cv.addEventListener('pointerup', e => { handlePointer(e, false); });
-cv.addEventListener('pointercancel', e => { handlePointer(e, false); });
+function releaseTouches() {
+  for (const code of TOUCHES.values()) {
+    if (code) KEYS[code] = false;
+  }
+  TOUCHES.clear();
+}
+
+function updateTouch(id, code) {
+  const old = TOUCHES.get(id) || '';
+  if (TOUCHES.has(id) && old === code) return;
+  TOUCHES.set(id, code);
+  if (old && old !== code) {
+    if (!Array.from(TOUCHES.values()).includes(old)) {
+      KEYS[old] = false;
+    }
+  }
+  if (code) {
+    KEYS[code] = true;
+  }
+}
+
+function handlePointerDown(e) {
+  initAudio();
+  if (e.pointerType === 'touch') {
+    TOUCH_MODE = true;
+  }
+  if (PORTRAIT) return;
+
+  const p = canvasPoint(e);
+
+  if (STATE === 'title') {
+    const btns = getTitleButtons();
+    if (pointInRect(p, btns.fullscreen)) {
+      toggleFullscreen();
+      SFX.ding();
+      return;
+    }
+    if (pointInRect(p, btns.touchToggle)) {
+      TOUCH_MODE = !TOUCH_MODE;
+      SFX.click();
+      return;
+    }
+    // Tocar em JOGAR ou em qualquer outro ponto da tela inicia a partida
+    STATE = 'play';
+    resetGame();
+    releaseTouches();
+    return;
+  }
+
+  // Checar botões utilitários no topo
+  const zones = getTouchZones();
+  const utilityZone = zones.find(z => ['fullscreen', 'crt', 'mute'].includes(z.id) && pointInZone(p, z));
+  if (utilityZone) {
+    if (utilityZone.id === 'fullscreen') {
+      toggleFullscreen();
+      SFX.ding();
+    } else if (utilityZone.id === 'crt') {
+      CRT_ENABLED = !CRT_ENABLED;
+      if (crtOverlay) crtOverlay.classList.toggle('disabled', !CRT_ENABLED);
+      SFX.click();
+    } else if (utilityZone.id === 'mute') {
+      MUTED = !MUTED;
+      if (masterGain) masterGain.gain.value = MUTED ? 0 : 0.75;
+      SFX.click();
+    }
+    return;
+  }
+
+  if (STATE === 'caught') {
+    ROUND++;
+    STATE = 'play';
+    initRound();
+    releaseTouches();
+    return;
+  }
+
+  if (STATE === 'escaped') {
+    if (LIVES > 0) {
+      STATE = 'play';
+      initRound();
+    }
+    releaseTouches();
+    return;
+  }
+
+  // Controles virtuais durante o gameplay
+  const gameZone = zones.find(z => !['fullscreen', 'crt', 'mute'].includes(z.id) && pointInZone(p, z));
+  if (gameZone) {
+    updateTouch(e.pointerId, gameZone.code);
+  }
+}
+
+function handlePointerMove(e) {
+  if (!TOUCHES.has(e.pointerId)) return;
+  const p = canvasPoint(e);
+  const zones = getTouchZones();
+  const gameZone = zones.find(z => !['fullscreen', 'crt', 'mute'].includes(z.id) && pointInZone(p, z));
+  updateTouch(e.pointerId, gameZone ? gameZone.code : '');
+}
+
+function handlePointerUp(e) {
+  releaseTouch(e.pointerId);
+}
+
+cv.addEventListener('pointerdown', e => { if (e.cancelable) e.preventDefault(); handlePointerDown(e); }, { passive: false });
+cv.addEventListener('pointermove', e => { handlePointerMove(e); }, { passive: false });
+cv.addEventListener('pointerup', e => { handlePointerUp(e); });
+cv.addEventListener('pointercancel', e => { handlePointerUp(e); });
 
 function pollGamepad() {
   const gp = navigator.getGamepads ? navigator.getGamepads()[0] : null;
@@ -2513,23 +2685,54 @@ function drawTouchControls() {
   const zones = getTouchZones();
 
   ctx.save();
-  for (const z of zones) {
-    const isDown = !!KEYS[z.code];
-    ctx.fillStyle = isDown ? 'rgba(229, 184, 36, 0.45)' : 'rgba(15, 23, 42, 0.45)';
-    ctx.strokeStyle = isDown ? '#ffd700' : 'rgba(255, 255, 255, 0.35)';
-    ctx.lineWidth = 2.5;
+  ctx.setTransform(DPR * US, 0, 0, DPR * US, 0, 0);
+
+  // Na tela de título, desenha apenas botões utilitários no topo
+  const activeZones = (STATE === 'title')
+    ? zones.filter(z => ['fullscreen', 'crt', 'mute'].includes(z.id))
+    : zones;
+
+  for (const z of activeZones) {
+    const isDown = z.code === 'Fullscreen'
+      ? isFullscreen()
+      : (z.code === 'KeyC' ? CRT_ENABLED : (z.code === 'KeyM' ? MUTED : !!KEYS[z.code]));
+    const vr = z.vr || z.r;
+
+    // Fundo em vidro fumê translúcido arcade com halo
+    ctx.fillStyle = isDown ? 'rgba(234, 179, 8, 0.42)' : 'rgba(15, 23, 42, 0.52)';
+    ctx.strokeStyle = isDown ? '#ffd700' : 'rgba(203, 213, 225, 0.35)';
+    ctx.lineWidth = isDown ? 2.5 : 1.5;
 
     ctx.beginPath();
-    ctx.arc(z.x, z.y, z.r, 0, TAU);
+    ctx.arc(z.x, z.y, vr, 0, TAU);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = isDown ? '#ffffff' : '#cbd5e1';
-    ctx.font = 'bold 14px monospace';
+    if (isDown) {
+      ctx.save();
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = 10;
+      ctx.strokeStyle = 'rgba(255, 215, 0, 0.7)';
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Texto ou Ícone Central
+    ctx.fillStyle = isDown ? '#ffffff' : (['fullscreen', 'crt', 'mute'].includes(z.id) ? '#cbd5e1' : '#f8fafc');
+    const isSmall = z.label.length > 2 || vr < 30;
+    ctx.font = isSmall ? 'bold 13px monospace' : 'bold 22px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(z.label, z.x, z.y);
+    ctx.fillText(z.label, z.x, z.y + (isSmall ? 1 : 0));
+
+    // Sublabel discreto para clareza
+    if (z.sublabel && vr >= 30) {
+      ctx.fillStyle = isDown ? '#fef08a' : 'rgba(148, 163, 184, 0.75)';
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText(z.sublabel, z.x, z.y + vr + 12);
+    }
   }
+
   ctx.restore();
 }
 
@@ -2544,33 +2747,69 @@ function drawTitleScreen() {
   ctx.font = '900 48px monospace';
   ctx.shadowColor = '#b45309';
   ctx.shadowBlur = 15;
-  ctx.fillText('PEGA LADRÃO 2.5D', VW / 2, VH * 0.28);
+  ctx.fillText('PEGA LADRÃO 2.5D', VW / 2, VH * 0.23);
   ctx.shadowBlur = 0;
 
   ctx.fillStyle = '#38bdf8';
   ctx.font = 'bold 20px monospace';
-  ctx.fillText('KEYSTONE KAPERS CLÁSSICO ATARI', VW / 2, VH * 0.35);
+  ctx.fillText('KEYSTONE KAPERS CLÁSSICO ATARI', VW / 2, VH * 0.30);
 
   ctx.fillStyle = '#e2e8f0';
-  ctx.font = '16px monospace';
-  ctx.fillText('Capture o ladrão Harry antes que o tempo esgote!', VW / 2, VH * 0.48);
-  ctx.fillText('Navegue pelos 3 quadros e 4 andares usando escadas e elevador.', VW / 2, VH * 0.53);
-  ctx.fillText('Cuidado com carrinhos, tijolos, fogueiras e aviões!', VW / 2, VH * 0.58);
+  ctx.font = '15px monospace';
+  ctx.fillText('Capture o ladrão Harry antes que o tempo esgote!', VW / 2, VH * 0.40);
+  ctx.fillText('Navegue pelos 3 quadros e 4 andares usando escadas e elevador.', VW / 2, VH * 0.45);
+  ctx.fillText('Cuidado com carrinhos, bolas, fogueiras e aviões!', VW / 2, VH * 0.50);
 
-  ctx.fillStyle = '#facc15';
-  ctx.font = 'bold 16px monospace';
   if (TOUCH_MODE) {
-    ctx.fillText('TOQUE NA TELA PARA INICIAR', VW / 2, VH * 0.72);
+    // Botão JOGAR NO CELULAR
+    ctx.fillStyle = '#15803d';
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(VW / 2 - 130, VH * 0.58, 260, 52, 10);
+    else ctx.rect(VW / 2 - 130, VH * 0.58, 260, 52);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 18px monospace';
+    ctx.fillText('▶ JOGAR NO CELULAR', VW / 2, VH * 0.58 + 26);
+
+    // Botão TELA CHEIA
+    const isFull = isFullscreen();
+    ctx.fillStyle = isFull ? '#0369a1' : '#1e293b';
+    ctx.strokeStyle = isFull ? '#38bdf8' : '#e5b824';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(VW / 2 - 130, VH * 0.69, 260, 44, 8);
+    else ctx.rect(VW / 2 - 130, VH * 0.69, 260, 44);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = isFull ? '#7dd3fc' : '#facc15';
+    ctx.font = 'bold 15px monospace';
+    ctx.fillText(isFull ? '✓ TELA CHEIA ATIVA' : '⛶ ATIVAR TELA CHEIA', VW / 2, VH * 0.69 + 22);
+
+    // Dica de rotação/controles
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px monospace';
+    ctx.fillText('Jogue na horizontal com botões virtuais', VW / 2, VH * 0.80);
   } else {
-    ctx.fillText('SETAS/WASD: Mover e Pular · ESPAÇO: Pulo · ELEVADOR: Entrar andando ou E / W', VW / 2, VH * 0.68);
+    ctx.fillStyle = '#facc15';
+    ctx.font = '15px monospace';
+    ctx.fillText('SETAS/WASD: Mover e Pular · ESPAÇO: Pulo · ELEVADOR: Entrar andando ou E / W', VW / 2, VH * 0.64);
     ctx.fillStyle = '#4ade80';
     ctx.font = 'bold 18px monospace';
-    ctx.fillText('PRESSIONE ESPAÇO OU ENTER PARA COMEÇAR', VW / 2, VH * 0.76);
+    ctx.fillText('PRESSIONE ESPAÇO OU ENTER PARA COMEÇAR', VW / 2, VH * 0.72);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = '13px monospace';
+    ctx.fillText('[F: Tela Cheia · Toque/Clique na tela para Controles de Celular]', VW / 2, VH * 0.80);
   }
 
   ctx.fillStyle = '#94a3b8';
   ctx.font = '13px monospace';
-  ctx.fillText(`RECORDE ATUAL: ${HIGH_SCORE} PONTOS`, VW / 2, VH * 0.85);
+  ctx.fillText(`RECORDE ATUAL: ${HIGH_SCORE} PONTOS`, VW / 2, VH * 0.88);
 
   ctx.restore();
 }
@@ -2678,7 +2917,6 @@ function mainLoop(timestamp) {
     drawTopHUD();
     drawUrgentCountdown();
     drawRoundBanner(dt);
-    drawTouchControls();
   } else if (STATE === 'caught') {
     STATE_TIME += dt;
     draw2DWorld();
@@ -2717,6 +2955,11 @@ function mainLoop(timestamp) {
   }
 
   ctx.restore();
+
+  // Camada de Controles Móveis (em tela cheia, fora do clipping 4:3)
+  if (TOUCH_MODE && !PORTRAIT) {
+    drawTouchControls();
+  }
 
   for (const k in KEYS) {
     PREV_KEYS[k] = KEYS[k];
@@ -2877,6 +3120,14 @@ window.__game = {
   },
   getTimer: () => TIMER,
   setTimer: t => { TIMER = t; },
+  isTouchMode: () => TOUCH_MODE,
+  setTouchMode: v => { TOUCH_MODE = v; resize(); },
+  isFullscreen: () => isFullscreen(),
+  toggleFullscreen: () => toggleFullscreen(),
+  getTouchZones: () => getTouchZones(),
+  getTitleButtons: () => getTitleButtons(),
+  handlePointerDown: (x, y, id = 1) => handlePointerDown({ clientX: x, clientY: y, pointerId: id, cancelable: false }),
+  handlePointerUp: (id = 1) => handlePointerUp({ pointerId: id }),
   step: dt => {
     updateTimer(dt);
     updateElevator(dt);
