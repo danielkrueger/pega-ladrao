@@ -10,11 +10,11 @@ RUN npm install --omit=dev
 COPY . .
 
 # Variáveis padrão de ambiente
-ENV PORT=3005
+ENV PORT=80
 ENV NODE_ENV=production
 
 # Porta da aplicação
-EXPOSE 3005
+EXPOSE 80
 
 # Comando de inicialização
 CMD ["npm", "start"]
